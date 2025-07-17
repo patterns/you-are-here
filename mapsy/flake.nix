@@ -279,10 +279,12 @@
     extra-experimental-features = ["nix-command flakes" "ca-derivations"];
     allow-import-from-derivation = "true";
     extra-substituters = [
-      "https://you-are-here.cachix.org"
+      "https://nix-community.cachix.org"
+
     ];
     extra-trusted-public-keys = [
-      "you-are-here.cachix.org-1:NZT1KIQRJY6a/j1hLI4Eh80JrxCPDnLX3D0g+fW+4Lo="
+      "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
+
     ];
   };
 }
