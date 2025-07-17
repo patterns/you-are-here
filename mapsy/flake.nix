@@ -4,30 +4,36 @@
   inputs = {
     ####nixpkgs.url = "https://channels.nixos.org/nixos-25.05/nixexprs.tar.xz";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
 
   };
 
-  outputs = { self, nixpkgs, ... }@inputs:
-  let
-      ####systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
+  outputs = { self, nixpkgs, flake-utils, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
 
   in
   {
     packages.x86_64-linux.hello = nixpkgs.legacyPackages.x86_64-linux.hello;
     defaultPackage.x86_64-linux = self.packages.x86_64-linux.hello;
+####        packages.default = pkgs.stdenv.mkDerivation {
+####          name = "my-project";
+####          src = ./.;
+####          buildInputs = [
+####            pkgs.gcc
+####          ];
+####        };
 
-        devShells.x86_64-linux = pkgs.mkShell (
-          with pkgs;
-          {
-            buildInputs = [
-              zig
-              ####zls
-              # You can add `just` to invoke `zig run`, `zig build-exe`, etc
-              # with specific arguments.
-              ####cairo
-            ];
-          }
-        );
+        devShells.default = pkgs.mkShell {
+          buildInputs = [
+            ####pkgs.git
+            ####pkgs.gcc
+            ####pkgs.python3
+            pkgs.zig
+            ####pkgs.cairo
+          ];
+        };
 
 
   };
