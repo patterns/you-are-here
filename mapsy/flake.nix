@@ -10,14 +10,13 @@
   outputs = { self, nixpkgs, ... }@inputs:
   let
       ####systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
-      systems = [ "x86_64-linux" "aarch64-linux" ];
+
   in
   {
-    ##packages.x86_64-linux.hello = nixpkgs.legacyPackages.x86_64-linux.hello;
-    ##defaultPackage.x86_64-linux = self.packages.x86_64-linux.hello;
-      perSystem = { pkgs, ... }: {
-        packages.default = pkgs.hello;
-        devShells.default = pkgs.mkShell (
+    packages.x86_64-linux.hello = nixpkgs.legacyPackages.x86_64-linux.hello;
+    defaultPackage.x86_64-linux = self.packages.x86_64-linux.hello;
+
+        devShells.x86_64-linux = pkgs.mkShell (
           with pkgs;
           {
             buildInputs = [
@@ -30,7 +29,6 @@
           }
         );
 
-      };
 
   };
 }
