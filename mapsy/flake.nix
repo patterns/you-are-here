@@ -15,12 +15,9 @@
   {
     ##packages.x86_64-linux.hello = nixpkgs.legacyPackages.x86_64-linux.hello;
     ##defaultPackage.x86_64-linux = self.packages.x86_64-linux.hello;
-      packages = systems (pkgs: {
-        default = pkgs.hello;
-      });
-
-      devShells = systems (pkgs: {
-        default = pkgs.mkShell (
+      perSystem = { pkgs, ... }: {
+        packages.default = pkgs.hello;
+        devShells.default = pkgs.mkShell (
           with pkgs;
           {
             buildInputs = [
@@ -32,7 +29,9 @@
             ];
           }
         );
-      });
+
+      };
 
   };
 }
+
