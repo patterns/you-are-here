@@ -39,10 +39,9 @@
           in
           {
             default = pkgs.mkShell {
-                buildInputs = with pkgs; [ zig zls lldb cairo ];
+                buildInputs = with pkgs; [ zig zls lldb s2geometry cairo ];
           };
         });
-
 
   };
 }
