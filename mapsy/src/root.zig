@@ -3,7 +3,7 @@ const cairo = @import("cairo");
 const s2 = @cImport({
     @cInclude("bindings.h");
 });
-
+const log = std.log.scoped(.libs2);
 const testing = std.testing;
 const math = std.math;
 
@@ -30,7 +30,7 @@ pub const Map = struct {
     savefile: []u8,
     savepath: []u8,
     appdatadir: []u8,
-    arena: std.heap.ArenaAllocator,
+    allocator: std.mem.Allocator,
 
     pub fn init(args: anytype) Map {
         return .{
@@ -56,7 +56,7 @@ pub const Map = struct {
             .savefile = "",
             .savepath = "",
             .appdatadir = "",
-            .arena = args.arena,
+            .allocator = args.allocator,
         };
     }
 
@@ -65,7 +65,7 @@ pub const Map = struct {
         const pointe = s2.mercator(me.lat, me.lng);
         me.xprojected = pointe.x;
         me.yprojected = pointe.y;
-        std.debug.print("projection {d}, {d} {s}", .{ me.xprojected, me.yprojected, newline });
+        log.debug("projection {d}, {d} ", .{ me.xprojected, me.yprojected });
     }
     pub fn originTile(me: *Map) void {
         // calc origin tile's index
@@ -78,32 +78,32 @@ pub const Map = struct {
         me.xtileorigin = @as(i32, @intFromFloat(math.floor(me.xtilemark - 0.5 * me.ww)));
         me.ytileorigin = @as(i32, @intFromFloat(math.floor(me.ytilemark - 0.5 * me.hh)));
 
-        std.debug.print("origin {d}, {d} {s}", .{ me.xtileorigin, me.ytileorigin, newline });
+        log.debug("origin {d}, {d} ", .{ me.xtileorigin, me.ytileorigin });
     }
     pub fn tileCount(me: *Map) void {
         // number of tiles along x/y axis
         me.xtilecount = 1 + (@as(i32, @intFromFloat(math.floor(me.xtilemark + 0.5 * me.ww))) - me.xtileorigin);
         me.ytilecount = 1 + (@as(i32, @intFromFloat(math.floor(me.ytilemark + 0.5 * me.hh))) - me.ytileorigin);
 
-        std.debug.print("tiles {d}, {d} {s}", .{ me.xtilecount, me.ytilecount, newline });
+        log.debug("tiles {d}, {d} ", .{ me.xtilecount, me.ytilecount });
     }
     pub fn markerPixel(me: *Map) void {
         const width_total = me.tilesize * me.xtilecount;
         const height_total = me.tilesize * me.ytilecount;
-        std.debug.print("size {d}, {d} {s}", .{ width_total, height_total, newline });
+        log.debug("size {d}, {d} ", .{ width_total, height_total });
 
         me.xpixelmark = @as(i32, @intFromFloat((me.xtilemark - @as(f64, @floatFromInt(me.xtileorigin))) * @as(f64, @floatFromInt(me.tilesize))));
         me.ypixelmark = @as(i32, @intFromFloat((me.ytilemark - @as(f64, @floatFromInt(me.ytileorigin))) * @as(f64, @floatFromInt(me.tilesize))));
-        std.debug.print("centerpx {d}, {d} {s}", .{ me.xpixelmark, me.ypixelmark, newline });
+        log.debug("centerpx {d}, {d} ", .{ me.xpixelmark, me.ypixelmark });
     }
 
     // format the tile URLs
     pub fn rasterSeries(me: *Map, cache: *std.ArrayList([]const u8)) !void {
         const tiles = math.powi(i32, 2, me.zoom) catch |err| {
-            std.debug.print("Shifting (power-2) overflowed {s}", .{newline});
+            log.err("Shifting (power-2) overflowed ", .{});
             return err;
         };
-        const allocator = me.arena.allocator();
+        const allocator = me.allocator;
 
         var xx: i32 = 0;
         while (xx < me.xtilecount) : (xx += 1) {
@@ -114,16 +114,16 @@ pub const Map = struct {
                 x = x - tiles;
             }
             if (x < 0 or x >= tiles) {
-                std.debug.print("Skipping out of bounds tile column {d} {s}", .{ x, newline });
+                log.debug("Skipping out of bounds tile column {d} ", .{x});
                 continue;
             }
-            std.debug.print("tilecolumn {d} {s}", .{ xx, newline });
+            log.debug("tilecolumn {d} ", .{xx});
 
             var yy: i32 = 0;
             while (yy < me.ytilecount) : (yy += 1) {
                 const y = me.ytileorigin + yy;
                 if (y < 0 or y >= tiles) {
-                    std.debug.print("Skipping out of bounds tile {d}/{d} {s}", .{ x, y, newline });
+                    log.debug("Skipping out of bounds tile {d}/{d} ", .{ x, y });
                     continue;
                 }
 
@@ -131,18 +131,18 @@ pub const Map = struct {
                 ////defer allocator.free(fpath);
 
                 if (found_status) {
-                    std.debug.print("Using existing tile {d}/{d} {s}", .{ x, y, newline });
+                    log.debug("Using existing tile {d}/{d} ", .{ x, y });
                     continue;
                 }
 
                 const buffer = osmFetch(allocator, me.zoom, x, y) catch |err| {
-                    std.debug.print("Failed OSM fetch {d}/{d}/{d} {s}", .{ me.zoom, x, y, newline });
+                    log.err("Failed OSM fetch {d}/{d}/{d} ", .{ me.zoom, x, y });
                     return err;
                 };
                 defer allocator.free(buffer);
 
                 rasterWrite(fpath, buffer) catch |err| {
-                    std.debug.print("Failed file creation {d}/{d}/{d} {s}", .{ me.zoom, x, y, newline });
+                    log.err("Failed file creation {d}/{d}/{d} ", .{ me.zoom, x, y });
                     return err;
                 };
             }
@@ -173,7 +173,7 @@ pub const Map = struct {
             const y = rh * @as(f64, @floatFromInt(row));
             try draw(cr, x, y, fpath);
         }
-        const alloc = me.arena.allocator();
+        const alloc = me.allocator;
         // output file to debug, but normally pass bytes to libvaxis draw
         me.appdatadir = try std.fs.getAppDataDir(alloc, "mapsy");
         me.savefile = try std.fmt.allocPrint(alloc, "knit-{d}{d}.png", .{ @trunc(me.lat), @trunc(@abs(me.lng)) });
@@ -183,11 +183,10 @@ pub const Map = struct {
     }
 
     pub fn deinit(me: *Map) void {
-        const alloc = me.arena.allocator();
+        const alloc = me.allocator;
         alloc.free(me.savepath);
         alloc.free(me.savefile);
         alloc.free(me.appdatadir);
-        me.arena.deinit();
     }
 };
 
@@ -211,9 +210,9 @@ fn osmFetch(allocator: std.mem.Allocator, zoom: i32, x: i32, y: i32) ![]const u8
     _ = try client.fetch(.{
         .location = .{ .url = url.constSlice() },
         .response_storage = .{ .dynamic = &body },
-        .headers = .{ .user_agent = .{ .override = "Mozilla/5.0+(compatible; mapsy/0.1; https://github.com/patterns/mapsy)" } },
+        .headers = .{ .user_agent = .{ .override = "Mozilla/5.0+(compatible; mapsy/0.1; https://github.com/patterns/you-are-here)" } },
     });
-    std.debug.print("https://tile.openstreetmap.org/{d}/{d}/{d}.png {s}", .{ zoom, x, y, newline });
+    log.debug("https://tile.openstreetmap.org/{d}/{d}/{d}.png ", .{ zoom, x, y });
     return body.toOwnedSlice();
 }
 

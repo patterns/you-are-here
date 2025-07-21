@@ -6,6 +6,10 @@ const TextInput = vaxis.widgets.TextInput;
 const border = vaxis.widgets.border;
 const log = std.log.scoped(.main);
 
+pub const std_options: std.Options = .{
+    .log_level = .warn,
+};
+
 const Event = union(enum) {
     key_press: vaxis.Key,
     mouse: vaxis.Mouse,
@@ -20,41 +24,11 @@ pub fn main() !void {
     defer arena.deinit();
     const alloc = arena.allocator();
 
-    // TODO accept lat/lng args from libvaxis
-    const lat = 47.608013;
-    const lng = -122.335167;
+    var lat: f64 = 47.608013;
+    var lng: f64 = -122.335167;
     ////const lat = 40.7128;
     ////const lng = -74.006;
-
-    const zoom = 14;
-    const total = std.math.exp2(@as(f64, zoom));
-    var map = mapsy.Map.init(.{
-        .tilesize = 256,
-        .zoom = zoom,
-        .xdimension = 800,
-        .ydimension = 600,
-        .numtiles = total,
-        .lat = lat,
-        .lng = lng,
-        .arena = arena,
-    });
-    defer map.deinit();
-    // calculations to prepare map attributes (extracted into steps from go-staticmaps)
-    map.mercator();
-    map.originTile();
-    map.tileCount();
-    map.markerPixel();
-
-    var cache = std.ArrayList([]const u8).init(alloc);
-    defer cache.deinit(); //TODO do we need to free each item?
-    map.rasterSeries(&cache) catch |err| {
-        std.debug.print("Raster tile url list failed", .{});
-        return err;
-    };
-    map.knit(cache) catch |err| {
-        std.debug.print("Tile knitting failed", .{});
-        return err;
-    };
+    var map = try mapFromLatLng(alloc, lat, lng);
 
     // TUI begins
     // Initalize a tty
@@ -87,8 +61,16 @@ pub fn main() !void {
 
     // init our text input widget. The text input widget needs an allocator to
     // store the contents of the input
-    var text_input = TextInput.init(alloc, &vx.unicode);
-    defer text_input.deinit();
+    var lat_input = TextInput.init(alloc, &vx.unicode);
+    defer lat_input.deinit();
+    var lng_input = TextInput.init(alloc, &vx.unicode);
+    defer lng_input.deinit();
+    const lat_plchold = try std.fmt.allocPrint(alloc, "{d}", .{lat});
+    defer alloc.free(lat_plchold);
+    const lng_plchold = try std.fmt.allocPrint(alloc, "{d}", .{lng});
+    defer alloc.free(lng_plchold);
+    try lat_input.insertSliceAtCursor(lat_plchold);
+    try lng_input.insertSliceAtCursor(lng_plchold);
 
     try vx.setMouseMode(writer, true);
 
@@ -100,22 +82,23 @@ pub fn main() !void {
     var img1 = try vaxis.zigimg.Image.fromFilePath(alloc, map.savepath);
     defer img1.deinit();
 
-    const imgs = [_]vaxis.Image{
+    var imgs = [_]vaxis.Image{
         try vx.transmitImage(alloc, tty.anyWriter(), &img1, .rgba),
-        try vx.loadImage(alloc, tty.anyWriter(), .{ .path = "zig.png" }),
+        ////try vx.loadImage(alloc, tty.anyWriter(), .{ .path = "zig.png" }),
     };
     defer vx.freeImage(tty.anyWriter(), imgs[0].id);
-    defer vx.freeImage(tty.anyWriter(), imgs[1].id);
+    ////defer vx.freeImage(tty.anyWriter(), imgs[1].id);
 
     var n: usize = 0;
-    var clip_y: u16 = 0;
+    var tab: usize = 0;
+    const clip_y: u16 = 0;
 
     // The main event loop. Vaxis provides a thread safe, blocking, buffered
     // queue which can serve as the primary event queue for an application
     while (true) {
         // nextEvent blocks until an event is in the queue
         const event = loop.nextEvent();
-        log.debug("event: {}", .{event});
+        ////log.debug("event: {}", .{event});
         // exhaustive switching ftw. Vaxis will send events if your Event
         // enum has the fields for those events (ie "key_press", "winsize")
         switch (event) {
@@ -130,20 +113,33 @@ pub fn main() !void {
                     vx.queueRefresh();
                 } else if (key.matches('n', .{ .ctrl = true })) {
                     try vx.notify(tty.anyWriter(), "vaxis", "hello from vaxis");
-                    loop.stop();
-                    var child = std.process.Child.init(&.{"nvim"}, alloc);
-                    _ = try child.spawnAndWait();
-                    try loop.start();
-                    try vx.enterAltScreen(tty.anyWriter());
-                    vx.queueRefresh();
                 } else if (key.matches(vaxis.Key.enter, .{})) {
-                    text_input.clearAndFree();
-                } else if (key.matches('j', .{})) {
-                    clip_y += 1;
-                } else if (key.matches('k', .{})) {
-                    clip_y -|= 1;
+                    ////lat_input.clearAndFree();
+                    var lat_buf: [48]u8 = undefined;
+                    var lng_buf: [48]u8 = undefined;
+                    lat = try std.fmt.parseFloat(f64, lat_input.sliceToCursor(&lat_buf));
+                    lng = try std.fmt.parseFloat(f64, lng_input.sliceToCursor(&lng_buf));
+                    map.deinit();
+                    map = try mapFromLatLng(alloc, lat, lng);
+                    img1.deinit();
+                    img1 = try vaxis.zigimg.Image.fromFilePath(alloc, map.savepath);
+                    vx.freeImage(tty.anyWriter(), imgs[0].id);
+                    imgs[0] = try vx.transmitImage(alloc, tty.anyWriter(), &img1, .rgba);
+                    n = 0;
+                } else if (key.matches(vaxis.Key.tab, .{})) {
+                    // change focus to the next text box
+                    if (tab == 0) {
+                        tab = 1;
+                    } else {
+                        tab = 0;
+                    }
                 } else {
-                    try text_input.update(.{ .key_press = key });
+                    // keypress goes to the text box in-focus
+                    if (tab == 0) {
+                        try lat_input.update(.{ .key_press = key });
+                    } else {
+                        try lng_input.update(.{ .key_press = key });
+                    }
                 }
             },
 
@@ -166,8 +162,6 @@ pub fn main() !void {
             else => {},
         }
 
-        n = (n + 1) % imgs.len;
-
         // vx.window() returns the root window. This window is the size of the
         // terminal and can spawn child windows as logical areas. Child windows
         // cannot draw outside of their bounds
@@ -181,23 +175,55 @@ pub fn main() !void {
         const style: vaxis.Style = .{
             .fg = .{ .index = color_idx },
         };
-
-        const child = win.child(.{
-            .x_off = win.width / 2 - 20,
-            .y_off = win.height / 2 - 3,
-            .width = 40,
-            .height = 3,
-            .border = .{
-                .where = .all,
-                .style = style,
-            },
-        });
-        text_input.draw(child);
+        // draw order determines the cursor position
+        if (tab == 0) {
+            lng_input.draw(win.child(.{
+                .x_off = 1,
+                .y_off = 4,
+                .width = 40,
+                .height = 3,
+                .border = .{
+                    .where = .all,
+                    .style = style,
+                },
+            }));
+            lat_input.draw(win.child(.{
+                .x_off = 1,
+                .y_off = 1,
+                .width = 40,
+                .height = 3,
+                .border = .{
+                    .where = .all,
+                    .style = style,
+                },
+            }));
+        } else {
+            lat_input.draw(win.child(.{
+                .x_off = 1,
+                .y_off = 1,
+                .width = 40,
+                .height = 3,
+                .border = .{
+                    .where = .all,
+                    .style = style,
+                },
+            }));
+            lng_input.draw(win.child(.{
+                .x_off = 1,
+                .y_off = 4,
+                .width = 40,
+                .height = 3,
+                .border = .{
+                    .where = .all,
+                    .style = style,
+                },
+            }));
+        }
         // draw the map image
         const img = imgs[n];
         const dims = try img.cellSize(win);
-        const center = vaxis.widgets.alignment.center(win, dims.cols, dims.rows);
-        try img.draw(center, .{ .scale = .contain, .clip_region = .{
+        const alignbr = vaxis.widgets.alignment.bottomRight(win, dims.cols, dims.rows);
+        try img.draw(alignbr, .{ .scale = .contain, .clip_region = .{
             .y = clip_y,
         } });
 
@@ -205,5 +231,37 @@ pub fn main() !void {
         try vx.render(writer);
         try buffered_writer.flush();
     }
-    
+}
+
+fn mapFromLatLng(alloc: std.mem.Allocator, lat: f64, lng: f64) !mapsy.Map {
+    const zoom = 14;
+    const total = std.math.exp2(@as(f64, zoom));
+    var map = mapsy.Map.init(.{
+        .tilesize = 256,
+        .zoom = zoom,
+        .xdimension = 800,
+        .ydimension = 600,
+        .numtiles = total,
+        .lat = lat,
+        .lng = lng,
+        .allocator = alloc,
+    });
+    ////defer map.deinit();
+    // calculations to prepare map attributes (extracted into steps from go-staticmaps)
+    map.mercator();
+    map.originTile();
+    map.tileCount();
+    map.markerPixel();
+
+    var cache = std.ArrayList([]const u8).init(alloc);
+    defer cache.deinit(); //TODO do we need to free each item?
+    map.rasterSeries(&cache) catch |err| {
+        log.err("Raster tile url list failed", .{});
+        return err;
+    };
+    map.knit(cache) catch |err| {
+        log.err("Tile knitting failed", .{});
+        return err;
+    };
+    return map;
 }
