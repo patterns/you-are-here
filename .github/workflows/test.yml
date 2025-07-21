@@ -1,4 +1,4 @@
-name: "Test"
+name: "TUI build placeholder"
 on: [ push, pull_request ]
 
 
@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./mapsy
+        working-directory: ./tui
 
     steps:
     - uses: actions/checkout@v4
