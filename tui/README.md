@@ -15,6 +15,9 @@ A maps TUI program.
 Go-staticmaps
   by [Florian Pigorsch](https://github.com/flopp/go-staticmaps) ([LICENSE](https://github.com/flopp/go-staticmaps/blob/master/LICENSE))
 
+Unit Square Mercator
+  by [Alex Chan](https://alexwlchan.net/2025/static-maps/)
+
 Cairo binding 
   by [koenigskraut](https://github.com/koenigskraut/giza)
 

@@ -15,7 +15,7 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
-    // Declare package dependency 
+    // Declare package dependency
     const vaxis_dep = b.dependency("vaxis", .{
         .target = target,
         .optimize = optimize,
@@ -27,8 +27,8 @@ pub fn build(b: *std.Build) void {
     // Declare dependency's module with the name from its build script
     const vaxis_module = vaxis_dep.module("vaxis");
     const cairo_module = giza_dep.module("cairo");
-////    const pango_module = giza_dep.module("pango");
-////    const pangocairo_module = giza_dep.module("pangocairo");
+    ////    const pango_module = giza_dep.module("pango");
+    ////    const pangocairo_module = giza_dep.module("pangocairo");
 
     const lib = b.addStaticLibrary(.{
         .name = "mapsy",
@@ -42,12 +42,11 @@ pub fn build(b: *std.Build) void {
     lib.linkLibC();
     lib.linkLibCpp();
     lib.linkSystemLibrary("s2");
-    lib.addCSourceFile(.{ .file = b.path( "src/bindings.cc" )});
+    lib.addCSourceFile(.{ .file = b.path("src/bindings.cc") });
     lib.root_module.addImport("cairo", cairo_module);
-////    lib.root_module.addImport("pango", pango_module);
-////    lib.root_module.addImport("pangocairo", pangocairo_module);
+    ////    lib.root_module.addImport("pango", pango_module);
+    ////    lib.root_module.addImport("pangocairo", pangocairo_module);
     lib.linkSystemLibrary("cairo");
-
 
     // Module
     const mapsy_mod = b.addModule("mapsy", .{
@@ -56,10 +55,10 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     mapsy_mod.addIncludePath(b.path("src"));
-    mapsy_mod.addCSourceFile(.{ .file = b.path( "src/bindings.cc" )});
+    mapsy_mod.addCSourceFile(.{ .file = b.path("src/bindings.cc") });
     mapsy_mod.addImport("cairo", cairo_module);
-////    mapsy_mod.addImport("pango", pango_module);
-////    mapsy_mod.addImport("pangocairo", pangocairo_module);
+    ////    mapsy_mod.addImport("pango", pango_module);
+    ////    mapsy_mod.addImport("pangocairo", pangocairo_module);
     mapsy_mod.linkSystemLibrary("cairo", .{});
 
     // This declares intent for the library to be installed into the standard
@@ -80,10 +79,9 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("mapsy", mapsy_mod);
     exe.root_module.addImport("cairo", cairo_module);
     exe.root_module.addImport("vaxis", vaxis_module);
-////    exe.root_module.addImport("pango", pango_module);
-////    exe.root_module.addImport("pangocairo", pangocairo_module);
+    ////    exe.root_module.addImport("pango", pango_module);
+    ////    exe.root_module.addImport("pangocairo", pangocairo_module);
     lib.linkSystemLibrary("cairo");
-
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
@@ -120,6 +118,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    lib_unit_tests.addIncludePath(b.path("src"));
+    lib_unit_tests.linkLibC();
+    lib_unit_tests.linkLibCpp();
+    lib_unit_tests.linkSystemLibrary("s2");
+    lib_unit_tests.addCSourceFile(.{ .file = b.path("src/bindings.cc") });
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
